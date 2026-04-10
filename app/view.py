@@ -37,25 +37,37 @@ with tab_single:
     st.sidebar.title("👤 Applicant Profile")
     st.sidebar.divider()
 
-    course_type   = st.sidebar.selectbox("Field of Study", ["Engineering", "MBA", "Nursing", "Data Science", "Finance", "Arts"])
-    cgpa          = st.sidebar.slider("Current CGPA", 4.0, 10.0, 8.5)
-    internships   = st.sidebar.number_input("Internships Completed", 0, 5, 1)
+    course_type    = st.sidebar.selectbox("Field of Study", ["Engineering", "MBA", "Nursing", "Data Science", "Finance", "Arts"])
+    cgpa           = st.sidebar.slider("Current CGPA", 4.0, 10.0, 8.5)
+    internships    = st.sidebar.number_input("Internships Completed", 0, 5, 1)
     certifications = st.sidebar.number_input("Certifications Earned", 0, 10, 2)
     institute_tier = st.sidebar.selectbox("College Quality", ["Tier 1 (High)", "Tier 2 (Mid)", "Tier 3 (Standard)"])
-    demand        = st.sidebar.slider("Job Market Demand (0–1)", 0.0, 1.0, 0.7)
-    mock          = st.sidebar.number_input("Mock Interviews Cleared", 0, 10, 3)
-    amount        = st.sidebar.number_input("Requested Loan (₹)", 100000, 5000000, 1000000)
-    rate          = st.sidebar.slider("Base Interest Rate (%)", 5.0, 15.0, 10.5)
-    tenure        = st.sidebar.slider("Repayment Term (Years)", 1, 25, 15)
+
+    st.sidebar.subheader("📊 Market Signals")
+    demand         = st.sidebar.slider("Industry Demand (0–1)", 0.0, 1.0, 0.7, help="Higher = more jobs available in your field")
+    density        = st.sidebar.slider("Regional Job Density (0–1)", 0.0, 1.0, 0.6, help="Higher = more employers in your region")
+    portal         = st.sidebar.slider("Job Portal Activity (0–1)", 0.0, 1.0, 0.5, help="How actively the applicant is applying online")
+    mock           = st.sidebar.number_input("Mock Interviews Cleared", 0, 10, 3)
+
+    st.sidebar.subheader("💰 Loan Terms")
+    amount         = st.sidebar.number_input("Requested Loan (₹)", 100000, 5000000, 1000000)
+    rate           = st.sidebar.slider("Base Interest Rate (%)", 5.0, 15.0, 10.5)
+    tenure         = st.sidebar.slider("Repayment Term (Years)", 1, 25, 15)
 
     tier_map = {"Tier 1 (High)": "Tier 1", "Tier 2 (Mid)": "Tier 2", "Tier 3 (Standard)": "Tier 3"}
     input_data = {
-        "course_type": course_type, "cgpa": cgpa, "internships": internships,
-        "certifications": certifications, "academic_consistency": "High",
-        "institute_tier": tier_map[institute_tier], "placement_cell_activity": "High",
-        "industry_demand_index": demand, "regional_job_density": 0.6,
-        "job_portal_activity": 0.5, "mock_interviews_cleared": mock,
-        "loan_amount": amount, "interest_rate": rate, "tenure_years": tenure
+        "course_type": course_type, "cgpa": cgpa,
+        "internships": internships, "certifications": certifications,
+        "academic_consistency": "High",
+        "institute_tier": tier_map[institute_tier],
+        "placement_cell_activity": "High",
+        "industry_demand_index": demand,
+        "regional_job_density": density,
+        "job_portal_activity": portal,
+        "mock_interviews_cleared": mock,
+        "loan_amount": amount,
+        "interest_rate": rate,
+        "tenure_years": tenure
     }
 
     if st.sidebar.button("👉 Run Underwriting"):
