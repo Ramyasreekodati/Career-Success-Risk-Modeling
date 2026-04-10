@@ -5,11 +5,11 @@ import plotly.express as px
 import os
 from io import BytesIO
 
-import os
-
-# --- CLOUD CONFIGURATION ---
-# Check if running in a cloud environment (like Render)
-API_BASE_URL = os.getenv("API_URL", "http://localhost:8000")
+# --- INTERNAL ENGINE IMPORT (For Streamlit Cloud Deployment) ---
+# We import core logic directly so we don't need a separate API process on the cloud.
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from app.main import core_predict
 
 st.set_page_config(page_title="AI Education Loan Underwriter", layout="wide")
 
@@ -28,7 +28,6 @@ st.title("⚖️ AI Education Loan Underwriting System")
 st.markdown("Automated Career Verification & Credit Intelligence Platform")
 
 # --- TOP HORIZONTAL NAVIGATION ---
-# Moving from sidebar to a prominent top-level tab structure
 tab_single, tab_batch, tab_history = st.tabs([
     "📂 Individual Loan Assessment", 
     "📊 Portfolio Batch Underwriting", 
@@ -70,9 +69,10 @@ with tab_single:
     if st.sidebar.button("👉 Run Comprehensive Underwriting"):
         with st.spinner("Executing Risk Models..."):
             try:
-                response = requests.post(f"{API_BASE_URL}/predict", json=input_data)
-                if response.status_code == 200:
-                    res = response.json()
+                # Direct call to core engine for zero-dependency deployment
+                res = core_predict(input_data)
+                
+                if res['status'] == 'success':
                     st.subheader("🎓 Personal Assessment Result")
                     
                     m1, m2, m3, m4 = st.columns(4)
@@ -106,9 +106,9 @@ with tab_single:
                                                color=['Academic', 'Market', 'Professional'],
                                                title="Risk Contributing Factors"), use_container_width=True)
                 else:
-                    st.error("Engine failed to generate result.")
+                    st.error(f"Engine Error: {res.get('error_message')}")
             except Exception as e:
-                st.error(f"Connection Error: {str(e)}")
+                st.error(f"Runtime Error: {str(e)}")
     else:
         st.info("Input profile details in the left sidebar and click 'Run' to see results.")
 
@@ -125,48 +125,54 @@ with tab_batch:
         
         if st.button("🚀 Start Batch Underwriting Process"):
             with st.spinner("Processing Large-Scale Inferences..."):
+                # Clean and Map
                 mapping = {"course_type":["degree","major"], "cgpa":["gpa","grades"], "internships":["intern"], "certifications":["certs"], "mock_interviews_cleared":["mock"], "institute_tier":["tier"]}
                 for target, aliases in mapping.items():
                     for alias in aliases:
                         if alias in df.columns and target not in df.columns: df.rename(columns={alias: target}, inplace=True)
                 
                 payload = df.to_dict(orient='records')
-                response = requests.post(f"{API_BASE_URL}/simulate-scenario", json={"data": payload, "scenario": scenario})
                 
-                if response.status_code == 200:
-                    results = response.json()
-                    processed = [ {
-                        "Decision": r['underwriting_decision']['decision'],
-                        "Salary Forecast": r['salary_lpa'],
-                        "Risk Category": r['default_risk']['category'],
-                        "DTI Ratio": r['stress_test']['debt_to_income_ratio'],
-                        "Verdict Reason": r['underwriting_decision']['reason']
-                    } for r in results if r['status'] == 'success']
-                    
-                    res_df = pd.DataFrame(processed)
-                    if not res_df.empty:
-                        st.divider()
-                        st.subheader("🏢 Portfolio Health Summary")
-                        c1, c2, c3, c4, c5 = st.columns(5)
-                        c1.metric("Batch Size", len(res_df))
-                        c2.metric("Approved", len(res_df[res_df['Decision'].str.contains('Approve')]))
-                        c3.metric("Conditional", len(res_df[res_df['Decision'].str.contains('Conditional')]))
-                        c4.metric("Rejected", len(res_df[res_df['Decision'] == 'Rejected']))
-                        avg_sal = res_df['Salary Forecast'].str.replace(' LPA', '').astype(float).mean()
-                        c5.metric("Avg Salary", f"₹{avg_sal:.2f} LPA")
+                # Market Scaling Logic
+                adjustments = {"Recession": {"demand": -0.4, "density": -0.2}, "Market Boom": {"demand": 0.3, "density": 0.2}, "Standard": {"demand": 0, "density": 0}}
+                adj = adjustments.get(scenario, adjustments["Standard"])
+                
+                final_results = []
+                for s in payload:
+                    s['industry_demand_index'] = max(0, min(1, float(s.get('industry_demand_index', 0.5)) + adj['demand']))
+                    s['regional_job_density'] = max(0, min(1, float(s.get('regional_job_density', 0.5)) + adj['density']))
+                    final_results.append(core_predict(s))
+                
+                res_df = pd.DataFrame([ {
+                    "Decision": r['underwriting_decision']['decision'],
+                    "Salary Forecast": r['salary_lpa'],
+                    "Risk Category": r['default_risk']['category'],
+                    "DTI Ratio": r['stress_test']['debt_to_income_ratio'],
+                    "Verdict Reason": r['underwriting_decision']['reason']
+                } for r in final_results if r['status'] == 'success'])
+                
+                if not res_df.empty:
+                    st.divider()
+                    st.subheader("🏢 Portfolio Health Summary")
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    c1.metric("Batch Size", len(res_df))
+                    c2.metric("Approved", len(res_df[res_df['Decision'].str.contains('Approve')]))
+                    c3.metric("Conditional", len(res_df[res_df['Decision'].str.contains('Conditional')]))
+                    c4.metric("Rejected", len(res_df[res_df['Decision'] == 'Rejected']))
+                    avg_sal = res_df['Salary Forecast'].str.replace(' LPA', '').astype(float).mean()
+                    c5.metric("Avg Salary", f"₹{avg_sal:.2f} LPA")
 
-                        st.divider()
-                        st.subheader("📊 Portfolio Yield & Risk Visualization")
-                        fig_pie = px.pie(res_df, names='Decision', hole=.4, 
-                                       color_discrete_sequence=px.colors.qualitative.Pastel)
-                        st.plotly_chart(fig_pie, use_container_width=True)
-                        
-                        st.subheader("📋 Complete Decision Ledger")
-                        st.dataframe(res_df, use_container_width=True)
-                        csv_data = res_df.to_csv(index=False).encode('utf-8')
-                        st.download_button(label="📥 Export Decision Ledger (CSV)", data=csv_data, file_name="underwriting_batch_results.csv", mime="text/csv")
-                    else:
-                        st.warning("Data quality issues detected. No records processed.")
+                    st.divider()
+                    st.subheader("📊 Portfolio Yield & Risk Visualization")
+                    fig_pie = px.pie(res_df, names='Decision', hole=.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                    
+                    st.subheader("📋 Complete Decision Ledger")
+                    st.dataframe(res_df, use_container_width=True)
+                    csv_data = res_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(label="📥 Export Decision Ledger (CSV)", data=csv_data, file_name="underwriting_results.csv", mime="text/csv")
+                else:
+                    st.warning("No records were successfully processed.")
 
 # --- SYSTEM HISTORY ---
 with tab_history:
