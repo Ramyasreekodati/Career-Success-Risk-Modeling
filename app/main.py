@@ -144,7 +144,12 @@ def core_predict(model_data: dict):
             "pricing_breakdown": pricing,
             "default_risk": pd_info,
             "intervention": goal_res,
-            "risk_breakdown": calculate_risk_breakdown(features_dict),
+            "risk_breakdown": calculate_risk_breakdown(
+                features_dict,
+                salary=salary,
+                emi=stress.get('monthly_emi', 0),
+                dti=stress.get('debt_to_income_ratio', 0)
+            ),
             "ai_summary": ai_report["narrative"],
             "ai_report": ai_report,
             "stress_test": stress,
@@ -172,46 +177,43 @@ def calculate_percentile(salary, cgpa):
     percentile = int(min(99, max(1, score * 100)))
     return 100 - percentile # "Top X%"
 
-def calculate_risk_breakdown(data):
+def calculate_risk_breakdown(data, salary=0, emi=0, dti=0):
     """
-    Fully dynamic risk breakdown — all three scores are driven
-    directly by the actual input values so the chart changes
-    with every different profile.
+    AI Risk Scoring Engine — follows the strict prompt spec:
+    Academic  = f(CGPA, Tier)
+    Market    = f(DTI, EMI vs Salary)
+    Professional = f(Internships, Predicted Salary)
+    All scores vary deterministically with input.
     """
-    cgpa            = float(data.get('cgpa', 7.0))
-    demand          = float(data.get('industry_demand_index', 0.5))
-    density         = float(data.get('regional_job_density', 0.5))
-    internships     = int(data.get('internships', 0))
-    certifications  = int(data.get('certifications', 0))
-    mock            = int(data.get('mock_interviews_cleared', 0))
-    portal          = float(data.get('job_portal_activity', 0.5))
-    tier            = str(data.get('institute_tier', 'Tier 2'))
+    cgpa        = float(data.get('cgpa', 7.0))
+    tier        = str(data.get('institute_tier', 'Tier 2'))
+    internships = int(data.get('internships', 0))
 
-    # Academic Risk  (0 = no risk, 100 = max risk)
-    # Driven by CGPA  (10 → 0 risk,  4 → 60 risk)
-    academic_risk = round(max(0, min(100, (10 - cgpa) * 10)), 1)
+    # ── ACADEMIC RISK (CGPA + Tier) ───────────────────────────────────────
+    # CGPA 10 → 0 risk | CGPA 4 → 60 risk  (scale: 0-60)
+    cgpa_risk  = round((10 - cgpa) / 6 * 60, 1)
+    tier_risk  = {'Tier 1': 0, 'Tier 2': 20, 'Tier 3': 40}.get(tier, 20)
+    academic   = round(min(100, cgpa_risk + tier_risk), 1)
 
-    # Market Risk
-    # Driven by demand index, job density, and institute tier
-    tier_penalty  = {'Tier 1': 0, 'Tier 2': 15, 'Tier 3': 30}
-    market_risk   = round(max(0, min(100,
-        (1 - demand) * 50 +
-        (1 - density) * 20 +
-        tier_penalty.get(tier, 15)
-    )), 1)
+    # ── MARKET RISK (DTI + EMI burden) ───────────────────────────────────
+    # Low income-to-debt → higher risk. High EMI vs salary → higher risk.
+    dti_risk   = round(min(dti * 100, 70), 1)                            # 0-70
+    # EMI burden: what % of monthly salary the EMI consumes
+    monthly_sal = salary / 12 if salary > 0 else 1
+    emi_burden  = round(min((emi / monthly_sal) * 30, 30), 1)            # 0-30
+    market      = round(min(100, dti_risk + emi_burden), 1)
 
-    # Professional Risk
-    # Driven by internships, certifications, mocks, and portal activity
-    intern_score  = min(internships * 20, 60)      # max 60 pts
-    cert_score    = min(certifications * 8, 30)    # max 30 pts
-    mock_score    = min(mock * 5, 20)              # max 20 pts
-    portal_score  = min(int(portal * 20), 20)      # max 20 pts
-    prof_risk     = round(max(0, 100 - (intern_score + cert_score + mock_score + portal_score)), 1)
+    # ── PROFESSIONAL RISK (Internship + Predicted Salary) ─────────────────
+    # No internship → 50 risk, 1 → 30, 2+ → 15, 3+ → 0
+    intern_risk = {0: 50, 1: 30, 2: 15}.get(min(internships, 2), 0)
+    # Low salary → high risk  (salary 3L → 50 pts, 25L → 0 pts)
+    sal_risk    = round(max(0, (1 - min(salary / 2500000, 1)) * 50), 1)
+    professional = round(min(100, intern_risk + sal_risk), 1)
 
     return {
-        "academic":     academic_risk,
-        "market":       market_risk,
-        "professional": prof_risk
+        "academic":     academic,
+        "market":       market,
+        "professional": professional
     }
 
 

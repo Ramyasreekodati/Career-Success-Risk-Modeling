@@ -137,20 +137,14 @@ with tab_single:
                             st.subheader("💡 What-If Simulation")
                             st.success(res['intervention']['text'])
 
-                        # Use sidebar values so chart is always in sync with profile
-                        tier_pm = {"Tier 1 (High)": 0, "Tier 2 (Mid)": 15, "Tier 3 (Standard)": 30}
-                        a_score = round(max(0, min(100, (10 - cgpa) * 10)), 1)
-                        m_score = round(max(0, min(100,
-                            (1 - demand) * 50 + (1 - density) * 20 + tier_pm.get(institute_tier, 15)
-                        )), 1)
-                        p_score = round(max(0, 100 - (
-                            min(int(internships)*20, 60) +
-                            min(int(certifications)*8, 30) +
-                            min(int(mock)*5, 20) +
-                            min(int(portal*20), 20)
-                        )), 1)
+                        # Risk scores computed from REAL model output (salary, EMI, DTI)
+                        rb = res.get('risk_breakdown', {})
+                        a_score = rb.get('academic', 0)
+                        m_score = rb.get('market', 0)
+                        p_score = rb.get('professional', 0)
 
                         st.subheader("📊 Risk Factor Variance")
+                        st.caption("Academic = CGPA + Tier | Market = DTI + EMI burden | Professional = Internships + Predicted Salary")
                         risk_fig = px.bar(
                             x=["Academic Risk", "Market Risk", "Professional Risk"],
                             y=[a_score, m_score, p_score],
@@ -161,10 +155,10 @@ with tab_single:
                                 "Professional Risk": "#ef4444"
                             },
                             text=[f"{a_score}%", f"{m_score}%", f"{p_score}%"],
-                            labels={"y": "Risk Score (0–100)"}
+                            labels={"y": "Risk Score (0–100, lower is better)"}
                         )
                         risk_fig.update_traces(textposition='outside')
-                        risk_fig.update_layout(showlegend=False)
+                        risk_fig.update_layout(showlegend=False, yaxis_range=[0, 110])
                         st.plotly_chart(risk_fig, use_container_width=True)
                 else:
                     st.error(f"⚠️ Engine Error: {res.get('error_message', 'Unknown error')}")
