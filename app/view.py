@@ -1,213 +1,251 @@
 import streamlit as st
 import pandas as pd
-import requests
 import plotly.express as px
 import os
-from io import BytesIO
-
-# --- INTERNAL ENGINE IMPORT (For Streamlit Cloud Deployment) ---
-# We import core logic directly so we don't need a separate API process on the cloud.
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from app.main import core_predict
 
 st.set_page_config(page_title="AI Education Loan Underwriter", layout="wide")
 
-# Custom CSS for Premium Look
+# Path setup for cloud
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import core engine directly (no HTTP needed on cloud)
+from app.main import core_predict
+from app.database import get_learning_stats
+
+# Custom CSS
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    div[data-testid="stMetricValue"] > div { font-size: 2.2rem !important; font-weight: 700; color: #ffffff; }
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #1e2130; border-radius: 8px; color: #ffffff; padding: 10px 20px; }
-    .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; border-bottom: none !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; font-weight: 700; }
+    div[data-testid="stMetricLabel"] { font-size: 0.9rem !important; color: #aaa; }
+    .stTabs [data-baseweb="tab"] { background-color: #1e2130; border-radius: 8px; color: #fff; padding: 10px 20px; }
+    .stTabs [aria-selected="true"] { background-color: #3b82f6 !important; }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 st.title("⚖️ AI Education Loan Underwriting System")
 st.markdown("Automated Career Verification & Credit Intelligence Platform")
 
-# --- TOP HORIZONTAL NAVIGATION ---
 tab_single, tab_batch, tab_history = st.tabs([
-    "📂 Individual Loan Assessment", 
-    "📊 Portfolio Batch Underwriting", 
+    "📂 Individual Loan Assessment",
+    "📊 Portfolio Batch Underwriting",
     "🕵️ System Summary & History"
 ])
 
-# Helper for stats
-from app.database import get_learning_stats
-
-# --- INDIVIDUAL ASSESSMENT ---
+# ─── TAB 1: Individual Assessment ───────────────────────────────────────────
 with tab_single:
     st.sidebar.title("👤 Applicant Profile")
     st.sidebar.divider()
-    
-    def user_input_features():
-        course_type = st.sidebar.selectbox("Field of Study", ["Engineering", "MBA", "Nursing", "Data Science", "Finance", "Arts"])
-        cgpa = st.sidebar.slider("Current CGPA", 4.0, 10.0, 8.5)
-        internships = st.sidebar.number_input("Internships", 0, 5, 1)
-        certifications = st.sidebar.number_input("Certifications", 0, 10, 2)
-        institute_tier = st.sidebar.selectbox("College Quality", ["Tier 1 (High)", "Tier 2 (Mid)", "Tier 3 (Standard)"])
-        demand = st.sidebar.slider("Job Market Demand", 0.0, 1.0, 0.7)
-        mock = st.sidebar.number_input("Mock Interviews Cleared", 0, 10, 3)
-        amount = st.sidebar.number_input("Requested Loan (₹)", 100000, 5000000, 1000000)
-        rate = st.sidebar.slider("Standard Rate (%)", 5.0, 15.0, 10.5)
-        tenure = st.sidebar.slider("Term (Years)", 1, 25, 15)
 
-        tier_map = {"Tier 1 (High)": "Tier 1", "Tier 2 (Mid)": "Tier 2", "Tier 3 (Standard)": "Tier 3"}
-        return {
-            "course_type": course_type, "cgpa": cgpa, "internships": internships, "certifications": certifications,
-            "academic_consistency": "High", "institute_tier": tier_map[institute_tier], 
-            "placement_cell_activity": "High", "industry_demand_index": demand,
-            "regional_job_density": 0.6, "job_portal_activity": 0.5,
-            "mock_interviews_cleared": mock, "loan_amount": amount,
-            "interest_rate": rate, "tenure_years": tenure
-        }
+    course_type   = st.sidebar.selectbox("Field of Study", ["Engineering", "MBA", "Nursing", "Data Science", "Finance", "Arts"])
+    cgpa          = st.sidebar.slider("Current CGPA", 4.0, 10.0, 8.5)
+    internships   = st.sidebar.number_input("Internships Completed", 0, 5, 1)
+    certifications = st.sidebar.number_input("Certifications Earned", 0, 10, 2)
+    institute_tier = st.sidebar.selectbox("College Quality", ["Tier 1 (High)", "Tier 2 (Mid)", "Tier 3 (Standard)"])
+    demand        = st.sidebar.slider("Job Market Demand (0–1)", 0.0, 1.0, 0.7)
+    mock          = st.sidebar.number_input("Mock Interviews Cleared", 0, 10, 3)
+    amount        = st.sidebar.number_input("Requested Loan (₹)", 100000, 5000000, 1000000)
+    rate          = st.sidebar.slider("Base Interest Rate (%)", 5.0, 15.0, 10.5)
+    tenure        = st.sidebar.slider("Repayment Term (Years)", 1, 25, 15)
 
-    input_data = user_input_features()
+    tier_map = {"Tier 1 (High)": "Tier 1", "Tier 2 (Mid)": "Tier 2", "Tier 3 (Standard)": "Tier 3"}
+    input_data = {
+        "course_type": course_type, "cgpa": cgpa, "internships": internships,
+        "certifications": certifications, "academic_consistency": "High",
+        "institute_tier": tier_map[institute_tier], "placement_cell_activity": "High",
+        "industry_demand_index": demand, "regional_job_density": 0.6,
+        "job_portal_activity": 0.5, "mock_interviews_cleared": mock,
+        "loan_amount": amount, "interest_rate": rate, "tenure_years": tenure
+    }
 
-    if st.sidebar.button("👉 Run Comprehensive Underwriting"):
-        with st.spinner("Executing Risk Models..."):
+    if st.sidebar.button("👉 Run Underwriting"):
+        with st.spinner("Running AI Underwriting Engine..."):
             try:
-                # Direct call to core engine for zero-dependency deployment
                 res = core_predict(input_data)
-                
-                if res['status'] == 'success':
-                    st.subheader("🎓 Personal Assessment Result")
-                    
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("Predicted Salary", f"₹{res['salary_lpa']}")
-                    m2.metric("Monthly EMI", f"₹{res['stress_test']['monthly_emi']:,}")
-                    m3.metric("Income-to-Debt", f"{res['stress_test']['debt_to_income_ratio']*100:.1f}%")
-                    m4.metric("Risk Category", res['default_risk']['category'])
 
-                    uw = res['underwriting_decision']
-                    colors = {"Approved": "#28a745", "Conditional Approval": "#ffc107", "Manual Review": "#17a2b8", "Rejected": "#dc3545", "Fast-Track Approval": "#155724"}
-                    color = colors.get(uw['decision'], "#007bff")
+                if res and res.get('status') == 'success':
+                    st.subheader("🎓 Personal Assessment Result")
+
+                    # ── Metric cards with safe defaults ──
+                    salary_display  = res.get('salary_lpa', 'N/A')
+                    emi_display     = res.get('stress_test', {}).get('monthly_emi', 0)
+                    dti_display     = res.get('stress_test', {}).get('debt_to_income_ratio', 0)
+                    risk_display    = res.get('default_risk', {}).get('category', 'N/A')
+
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Predicted Salary", f"₹{salary_display}")
+                    m2.metric("Monthly EMI", f"₹{emi_display:,.0f}")
+                    m3.metric("Income-to-Debt Ratio", f"{dti_display*100:.1f}%")
+                    m4.metric("Risk Category", risk_display)
+
+                    # ── Verdict Banner ──
+                    uw = res.get('underwriting_decision', {})
+                    decision_text   = uw.get('decision', 'N/A')
+                    reason_text     = uw.get('reason', '')
+                    final_rate      = res.get('pricing_breakdown', {}).get('final_rate', 'N/A')
+                    rate_band       = res.get('pricing_breakdown', {}).get('rate_band', '')
+
+                    colors = {
+                        "Approved": "#28a745", "Fast-Track Approval": "#155724",
+                        "Conditional Approval": "#ffc107", "Manual Review": "#17a2b8",
+                        "Rejected": "#dc3545"
+                    }
+                    color = colors.get(decision_text, "#007bff")
+
                     st.markdown(f"""
-                        <div style="background-color:{color}22; padding:25px; border-radius:15px; border-left: 10px solid {color}; margin-bottom:20px;">
-                            <h1 style="color:{color}; margin:0; font-size:2.2rem">Verdict: {uw['decision']}</h1>
-                            <p style="font-size:1.2rem; margin-top:10px;"><b>Reasoning:</b> {uw['reason']}</p>
-                            <p style="font-size:1.1rem"><b>Recommended Loan Rate:</b> {res['pricing_breakdown']['final_rate']}%</p>
+                        <div style="background:{color}22; padding:25px; border-radius:15px; border-left:10px solid {color}; margin:16px 0">
+                            <h1 style="color:{color}; margin:0; font-size:2rem">Verdict: {decision_text}</h1>
+                            <p style="font-size:1.1rem; margin-top:10px"><b>Reasoning:</b> {reason_text}</p>
+                            <p style="font-size:1rem"><b>Recommended Rate:</b> {final_rate}% &nbsp;|&nbsp; <em>{rate_band}</em></p>
                         </div>
                     """, unsafe_allow_html=True)
 
+                    # ── Analytical Breakdown ──
                     with st.expander("🔍 Detailed Analytical Breakdown", expanded=True):
-                        
                         ai = res.get('ai_report', {})
 
-                        st.subheader("📋 AI Underwriting Analysis")
-                        st.markdown(f"**Structured Reasoning:** {ai.get('reasoning', res.get('ai_summary', ''))}")
+                        st.markdown(f"**📋 Structured Reasoning:** {ai.get('reasoning', reason_text)}")
+                        st.divider()
 
                         col_a, col_b = st.columns(2)
                         with col_a:
-                            st.subheader("⚠️ Risk Factors")
+                            st.subheader("⚠️ Key Risk Factors")
                             for rf in ai.get('risk_factors', []):
                                 st.markdown(f"- {rf}")
-
                         with col_b:
                             st.subheader("📈 Career Growth Advice")
                             for advice in ai.get('career_advice', []):
                                 st.markdown(f"- {advice}")
 
-                        st.subheader("🗺️ Career Outlook Narrative")
+                        st.divider()
+                        st.subheader("🗺️ Career Outlook")
                         st.info(ai.get('narrative', res.get('ai_summary', '')))
 
-                        if 'intervention' in res:
-                            st.subheader("💡 What-If Actions")
+                        if res.get('intervention', {}).get('text'):
+                            st.subheader("💡 What-If Simulation")
                             st.success(res['intervention']['text'])
 
-                        st.subheader("📊 Risk Variance Breakdown")
-                        st.plotly_chart(px.bar(
-                            x=['Academic', 'Market', 'Professional'],
-                            y=[res['risk_breakdown']['academic'], res['risk_breakdown']['market'], res['risk_breakdown']['professional']],
-                            color=['Academic', 'Market', 'Professional'],
-                            title="Risk Contributing Factors"
-                        ), use_container_width=True)
+                        rb = res.get('risk_breakdown', {})
+                        if rb:
+                            st.subheader("📊 Risk Factor Variance")
+                            st.plotly_chart(
+                                px.bar(
+                                    x=['Academic', 'Market', 'Professional'],
+                                    y=[rb.get('academic', 0), rb.get('market', 0), rb.get('professional', 0)],
+                                    color=['Academic', 'Market', 'Professional'],
+                                    title="Risk Contributing Factors"
+                                ), use_container_width=True
+                            )
                 else:
-                    st.error(f"Engine Error: {res.get('error_message')}")
+                    st.error(f"⚠️ Engine Error: {res.get('error_message', 'Unknown error')}")
             except Exception as e:
                 st.error(f"Runtime Error: {str(e)}")
     else:
-        st.info("Input profile details in the left sidebar and click 'Run' to see results.")
+        st.info("Fill in the applicant profile on the left sidebar, then click 'Run Underwriting'.")
 
-# --- BATCH UNDERWRITING ---
+# ─── TAB 2: Batch Portfolio ──────────────────────────────────────────────────
 with tab_batch:
     st.subheader("📊 Portfolio Bulk Assessment Dashboard")
-    st.write("Process bulk applications and visualize portfolio risk and yield.")
-    
+
     uploaded = st.file_uploader("Upload Applicant CSV", type="csv")
     if uploaded:
         df = pd.read_csv(uploaded)
-        st.info(f"📂 **{uploaded.name}** loaded with {len(df)} records.")
-        scenario = st.selectbox("Simulated Market Environment", ["Standard", "Recession", "Market Boom"])
-        
-        if st.button("🚀 Start Batch Underwriting Process"):
-            with st.spinner("Processing Large-Scale Inferences..."):
-                # Clean and Map
-                mapping = {"course_type":["degree","major"], "cgpa":["gpa","grades"], "internships":["intern"], "certifications":["certs"], "mock_interviews_cleared":["mock"], "institute_tier":["tier"]}
-                for target, aliases in mapping.items():
-                    for alias in aliases:
-                        if alias in df.columns and target not in df.columns: df.rename(columns={alias: target}, inplace=True)
-                
-                payload = df.to_dict(orient='records')
-                
-                # Market Scaling Logic
-                adjustments = {"Recession": {"demand": -0.4, "density": -0.2}, "Market Boom": {"demand": 0.3, "density": 0.2}, "Standard": {"demand": 0, "density": 0}}
-                adj = adjustments.get(scenario, adjustments["Standard"])
-                
-                final_results = []
-                for s in payload:
+        st.info(f"📂 **{uploaded.name}** loaded with **{len(df)}** records.")
+        scenario = st.selectbox("Market Scenario", ["Standard", "Recession", "Market Boom"])
+
+        if st.button("🚀 Start Batch Underwriting"):
+            with st.spinner("Processing batch…"):
+                # Column alias mapping
+                alias_map = {
+                    "course_type": ["degree", "major"],
+                    "cgpa": ["gpa", "grades"],
+                    "internships": ["intern"],
+                    "certifications": ["certs"],
+                    "mock_interviews_cleared": ["mock"],
+                    "institute_tier": ["tier"]
+                }
+                for target, aliases in alias_map.items():
+                    for a in aliases:
+                        if a in df.columns and target not in df.columns:
+                            df.rename(columns={a: target}, inplace=True)
+
+                adjustments = {
+                    "Recession":    {"demand": -0.4, "density": -0.2},
+                    "Market Boom":  {"demand":  0.3, "density":  0.2},
+                    "Standard":     {"demand":  0.0, "density":  0.0}
+                }
+                adj = adjustments[scenario]
+
+                records, processed = df.to_dict(orient='records'), []
+                for s in records:
                     s['industry_demand_index'] = max(0, min(1, float(s.get('industry_demand_index', 0.5)) + adj['demand']))
-                    s['regional_job_density'] = max(0, min(1, float(s.get('regional_job_density', 0.5)) + adj['density']))
-                    final_results.append(core_predict(s))
-                
-                res_df = pd.DataFrame([ {
-                    "Decision": r['underwriting_decision']['decision'],
-                    "Salary Forecast": r['salary_lpa'],
-                    "Risk Category": r['default_risk']['category'],
-                    "DTI Ratio": r['stress_test']['debt_to_income_ratio'],
-                    "Verdict Reason": r['underwriting_decision']['reason']
-                } for r in final_results if r['status'] == 'success'])
-                
-                if not res_df.empty:
+                    s['regional_job_density']  = max(0, min(1, float(s.get('regional_job_density',  0.5)) + adj['density']))
+                    r = core_predict(s)
+                    if r and r.get('status') == 'success':
+                        processed.append({
+                            "Decision":        r['underwriting_decision']['decision'],
+                            "Salary Forecast": r['salary_lpa'],
+                            "Risk Category":   r['default_risk']['category'],
+                            "DTI %":           f"{r['stress_test']['debt_to_income_ratio']*100:.1f}%",
+                            "Rate Band":       r['pricing_breakdown'].get('rate_band', ''),
+                            "Reason":          r['underwriting_decision']['reason']
+                        })
+
+                if processed:
+                    res_df = pd.DataFrame(processed)
+
                     st.divider()
                     st.subheader("🏢 Portfolio Health Summary")
                     c1, c2, c3, c4, c5 = st.columns(5)
-                    c1.metric("Batch Size", len(res_df))
-                    c2.metric("Approved", len(res_df[res_df['Decision'].str.contains('Approve')]))
-                    c3.metric("Conditional", len(res_df[res_df['Decision'].str.contains('Conditional')]))
-                    c4.metric("Rejected", len(res_df[res_df['Decision'] == 'Rejected']))
-                    avg_sal = res_df['Salary Forecast'].str.replace(' LPA', '').astype(float).mean()
-                    c5.metric("Avg Salary", f"₹{avg_sal:.2f} LPA")
+                    n_approved    = len(res_df[res_df['Decision'].str.contains('Approve', na=False)])
+                    n_conditional = len(res_df[res_df['Decision'].str.contains('Conditional', na=False)])
+                    n_rejected    = len(res_df[res_df['Decision'] == 'Rejected'])
+                    avg_sal = (
+                        res_df['Salary Forecast'].str.replace(' LPA', '', regex=False)
+                        .astype(float).mean()
+                    )
+                    c1.metric("Batch Size",    str(len(res_df)))
+                    c2.metric("Approved",      str(n_approved))
+                    c3.metric("Conditional",   str(n_conditional))
+                    c4.metric("Rejected",      str(n_rejected))
+                    c5.metric("Avg Salary",    f"₹{avg_sal:.2f} LPA")
 
                     st.divider()
-                    st.subheader("📊 Portfolio Yield & Risk Visualization")
-                    fig_pie = px.pie(res_df, names='Decision', hole=.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                    
-                    st.subheader("📋 Complete Decision Ledger")
-                    st.dataframe(res_df, use_container_width=True)
-                    csv_data = res_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(label="📥 Export Decision Ledger (CSV)", data=csv_data, file_name="underwriting_results.csv", mime="text/csv")
-                else:
-                    st.warning("No records were successfully processed.")
+                    st.subheader("📊 Portfolio Yield Visualization")
+                    st.plotly_chart(
+                        px.pie(res_df, names='Decision', hole=.4,
+                               color_discrete_sequence=px.colors.qualitative.Pastel),
+                        use_container_width=True
+                    )
 
-# --- SYSTEM HISTORY ---
+                    st.subheader("📋 Decision Ledger")
+                    st.dataframe(res_df, use_container_width=True)
+
+                    csv_bytes = res_df.to_csv(index=False).encode('utf-8')
+                    st.download_button("📥 Export CSV", data=csv_bytes,
+                                       file_name="underwriting_results.csv", mime="text/csv")
+                else:
+                    st.warning("No records were successfully processed. Check CSV column names.")
+
+# ─── TAB 3: System History ───────────────────────────────────────────────────
 with tab_history:
     st.subheader("🕵️ Platform Historical Performance")
+
     stats = get_learning_stats()
+    total  = stats.get('total_inferences', 0)
+    approvals = stats.get('approvals', 0)
+    yield_val = f"{(approvals / total * 100):.1f}%" if total > 0 else "N/A"
+
     col1, col2, col3 = st.columns(3)
-    col1.metric("Lifetime Decisions Audited", stats['total_inferences'])
-    yield_val = (stats['approvals'] / stats['total_inferences'] * 100) if stats['total_inferences'] > 0 else 0
-    col2.metric("Lifetime Approval Yield", f"{yield_val:.1f}%")
-    col3.metric("Drift Status", "Stable (Standard)")
-    
+    col1.metric("Lifetime Decisions", str(total) if total > 0 else "N/A")
+    col2.metric("Lifetime Approval Yield", yield_val)
+    col3.metric("Drift Status", "N/A (logs required)")
+
     st.divider()
-    st.write("📂 **Recent Audit Trail (Latest 100 Records)**")
-    if os.path.exists("data/audit_logs.jsonl"):
-        audit_df = pd.read_json("data/audit_logs.jsonl", lines=True)
-        log_view = pd.json_normalize(audit_df.to_dict(orient='records'))
-        st.dataframe(log_view.tail(100), use_container_width=True)
+    log_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'audit_logs.jsonl')
+    if os.path.exists(log_path):
+        audit_df = pd.read_json(log_path, lines=True)
+        st.write(f"📂 **Showing latest {min(100, len(audit_df))} records**")
+        st.dataframe(audit_df.tail(100), use_container_width=True)
     else:
-        st.info("No audit logs available.")
+        st.info("No audit logs available yet. Run individual underwriting sessions to populate this view.")
