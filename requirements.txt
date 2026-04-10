@@ -13,3 +13,4 @@ seaborn
 python-multipart
 pydantic
 python-dotenv
+requests
