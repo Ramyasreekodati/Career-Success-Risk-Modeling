@@ -17,13 +17,25 @@ app = FastAPI(title="AI Underwriting & Risk Platform")
 # Load models and artifacts
 models = {}
 
+def load_all_models():
+    """Load models globally if they haven't been loaded yet."""
+    if not models:
+        try:
+            # Resolve paths relative to the project root
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            
+            models['clf'] = joblib.load(os.path.join(base_path, 'models', 'clf_timeline.pkl'))
+            models['reg'] = joblib.load(os.path.join(base_path, 'models', 'reg_salary.pkl'))
+            models['scaler'] = joblib.load(os.path.join(base_path, 'models', 'scaler.pkl'))
+            models['le'] = joblib.load(os.path.join(base_path, 'models', 'le_timeline.pkl'))
+            models['features'] = joblib.load(os.path.join(base_path, 'models', 'feature_names.pkl'))
+            print("INFO: All models loaded successfully into the core engine.")
+        except Exception as e:
+            print(f"CRITICAL ERROR: Failed to load models: {str(e)}")
+
 @app.on_event("startup")
-def load_artifacts():
-    models['clf'] = joblib.load('models/clf_timeline.pkl')
-    models['reg'] = joblib.load('models/reg_salary.pkl')
-    models['scaler'] = joblib.load('models/scaler.pkl')
-    models['le'] = joblib.load('models/le_timeline.pkl')
-    models['features'] = joblib.load('models/feature_names.pkl')
+def startup_event():
+    load_all_models()
 
 class StudentData(BaseModel):
     course_type: str
@@ -59,6 +71,7 @@ def core_predict(model_data: dict):
     Core prediction engine used by both single and batch pipelines.
     Enforces consistent preprocessing and debugging.
     """
+    load_all_models()
     try:
         # Debugging: Log Input
         print(f"DEBUG: Processing record with keys: {list(model_data.keys())}")
