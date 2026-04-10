@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from src.explainability import get_risk_explanation
-from app.underwriting import calculate_underwriting_decision, calculate_risk_based_pricing, generate_targeted_interventions, estimate_default_probability
+from app.underwriting import calculate_underwriting_decision, calculate_risk_based_pricing, generate_targeted_interventions, estimate_default_probability, generate_ai_narrative
 from app.database import log_decision
 import uvicorn
 
@@ -117,13 +117,24 @@ def core_predict(model_data: dict):
         pricing = calculate_risk_based_pricing(loan_info['interest_rate'], current_risk, stress['debt_to_income_ratio'])
         pd_info = estimate_default_probability(current_risk, stress['debt_to_income_ratio'])
         
-        # 3. Targeted Interventions (Internal helper call)
+        # 3. Targeted Interventions
         goal_res = generate_targeted_interventions(
             current_risk,
             features_dict,
             internal_predict
         )
-        
+
+        # 4. Structured AI Narrative (Data-Driven)
+        ai_report = generate_ai_narrative(
+            risk_level=current_risk,
+            dti=stress['debt_to_income_ratio'],
+            salary=salary,
+            timeline=timeline_label,
+            cgpa=float(features_dict.get('cgpa', 7.0)),
+            internships=int(features_dict.get('internships', 0)),
+            tier=str(features_dict.get('institute_tier', 'Tier 2'))
+        )
+
         # Final result assembly
         return {
             "placement_timeline": timeline_label,
@@ -134,7 +145,8 @@ def core_predict(model_data: dict):
             "default_risk": pd_info,
             "intervention": goal_res,
             "risk_breakdown": calculate_risk_breakdown(features_dict),
-            "ai_summary": generate_polished_summary(timeline_label, features_dict),
+            "ai_summary": ai_report["narrative"],
+            "ai_report": ai_report,
             "stress_test": stress,
             "status": "success"
         }

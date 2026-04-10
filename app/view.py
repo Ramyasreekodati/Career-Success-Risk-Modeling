@@ -93,18 +93,37 @@ with tab_single:
                     """, unsafe_allow_html=True)
 
                     with st.expander("🔍 Detailed Analytical Breakdown", expanded=True):
-                        st.subheader("Career Growth Path")
-                        if 'intervention' in res: st.info(res['intervention']['text'])
+                        
+                        ai = res.get('ai_report', {})
+
+                        st.subheader("📋 AI Underwriting Analysis")
+                        st.markdown(f"**Structured Reasoning:** {ai.get('reasoning', res.get('ai_summary', ''))}")
+
                         col_a, col_b = st.columns(2)
                         with col_a:
-                            st.subheader("AI Narrative Summary")
-                            st.write(res['ai_summary'])
+                            st.subheader("⚠️ Risk Factors")
+                            for rf in ai.get('risk_factors', []):
+                                st.markdown(f"- {rf}")
+
                         with col_b:
-                            st.subheader("Risk Variances")
-                            st.plotly_chart(px.bar(x=['Academic', 'Market', 'Professional'], 
-                                               y=[res['risk_breakdown']['academic'], res['risk_breakdown']['market'], res['risk_breakdown']['professional']], 
-                                               color=['Academic', 'Market', 'Professional'],
-                                               title="Risk Contributing Factors"), use_container_width=True)
+                            st.subheader("📈 Career Growth Advice")
+                            for advice in ai.get('career_advice', []):
+                                st.markdown(f"- {advice}")
+
+                        st.subheader("🗺️ Career Outlook Narrative")
+                        st.info(ai.get('narrative', res.get('ai_summary', '')))
+
+                        if 'intervention' in res:
+                            st.subheader("💡 What-If Actions")
+                            st.success(res['intervention']['text'])
+
+                        st.subheader("📊 Risk Variance Breakdown")
+                        st.plotly_chart(px.bar(
+                            x=['Academic', 'Market', 'Professional'],
+                            y=[res['risk_breakdown']['academic'], res['risk_breakdown']['market'], res['risk_breakdown']['professional']],
+                            color=['Academic', 'Market', 'Professional'],
+                            title="Risk Contributing Factors"
+                        ), use_container_width=True)
                 else:
                     st.error(f"Engine Error: {res.get('error_message')}")
             except Exception as e:
