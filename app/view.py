@@ -70,7 +70,39 @@ with tab_single:
         "tenure_years": tenure
     }
 
-    if st.sidebar.button("👉 Run Underwriting"):
+    # ── LIVE RISK PREVIEW (no button needed — updates instantly) ──────────────
+    st.subheader("📊 Live Risk Factor Preview")
+    st.caption("This chart updates in real-time as you adjust the profile inputs on the left.")
+
+    tier_penalty_map = {"Tier 1 (High)": 0, "Tier 2 (Mid)": 15, "Tier 3 (Standard)": 30}
+    live_academic = round(max(0, min(100, (10 - cgpa) * 10)), 1)
+    live_market   = round(max(0, min(100,
+        (1 - demand) * 50 + (1 - density) * 20 + tier_penalty_map.get(institute_tier, 15)
+    )), 1)
+    intern_s = min(int(internships) * 20, 60)
+    cert_s   = min(int(certifications) * 8, 30)
+    mock_s   = min(int(mock) * 5, 20)
+    portal_s = min(int(portal * 20), 20)
+    live_prof = round(max(0, 100 - (intern_s + cert_s + mock_s + portal_s)), 1)
+
+    live_fig = px.bar(
+        x=["Academic Risk", "Market Risk", "Professional Risk"],
+        y=[live_academic, live_market, live_prof],
+        color=["Academic Risk", "Market Risk", "Professional Risk"],
+        color_discrete_map={
+            "Academic Risk":     "#3b82f6",
+            "Market Risk":       "#f59e0b",
+            "Professional Risk": "#ef4444"
+        },
+        text=[f"{live_academic}%", f"{live_market}%", f"{live_prof}%"],
+        labels={"x": "Risk Category", "y": "Risk Score (0–100)"}
+    )
+    live_fig.update_traces(textposition='outside')
+    live_fig.update_layout(showlegend=False, margin=dict(t=20, b=20))
+    st.plotly_chart(live_fig, use_container_width=True)
+
+    st.divider()
+    if st.sidebar.button("👉 Run Full Underwriting"):
         with st.spinner("Running AI Underwriting Engine..."):
             try:
                 res = core_predict(input_data)
