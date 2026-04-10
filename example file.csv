@@ -1,0 +1,25 @@
+﻿student_id,course_type,cgpa,internships,certifications,academic_consistency,institute_tier,placement_cell_activity,industry_demand_index,regional_job_density,job_portal_activity,mock_interviews_cleared,placement_timeline,actual_salary,placement_risk_score
+1,Data Science,7.32,1,1,Low,Tier 3,Low,0.521823225,0.763551234,0.71068788,5,Delayed / High Risk,568166,3
+2,Finance,7.88,0,4,Medium,Tier 2,Low,0.193475849,0.960206207,0.830232365,3,Delayed / High Risk,619032,3
+3,Nursing,8.98,3,3,Medium,Tier 2,High,0.892030115,0.276136416,0.635100537,3,Within 3 months,460213,0
+4,Finance,9.49,0,5,Medium,Tier 2,Medium,0.031061656,0.246516324,0.905026597,7,Within 12 months,672217,2
+5,Finance,7.73,1,5,Medium,Tier 2,High,0.895396268,0.563616586,0.697976047,6,Within 6 months,690674,1
+6,MBA,6.17,2,2,Low,Tier 2,Medium,0.050520227,0.8116839,0.370954646,3,Within 12 months,787883,2
+7,Nursing,6.65,3,0,High,Tier 3,Medium,0.665849365,0.746525682,0.181258292,5,Within 12 months,306456,2
+8,Nursing,6.08,1,5,Medium,Tier 2,High,0.07167938,0.559958903,0.924647479,5,Within 12 months,363419,2
+9,Nursing,8.61,3,4,Low,Tier 3,Low,0.706212986,0.631389682,0.10359715,0,Within 6 months,323179,1
+10,Finance,7.33,0,3,High,Tier 2,High,0.033971321,0.242098957,0.542988404,1,Delayed / High Risk,638722,3
+11,Arts,8.68,2,4,High,Tier 2,Medium,0.744221673,0.779379078,0.651459186,0,Within 6 months,357330,1
+12,Data Science,8.8,2,4,Medium,Tier 2,High,0.765068574,0.566764564,0.488875761,4,Within 6 months,766524,1
+13,Data Science,6.82,3,0,Medium,Tier 2,High,0.158555968,0.229795684,0.536908008,1,Within 12 months,748092,2
+14,Data Science,8.62,1,3,High,Tier 1,Low,0.592772299,0.037894363,0.832796674,6,Within 6 months,968753,1
+15,MBA,9.27,1,0,Medium,Tier 1,Low,0.896197798,0.618288821,0.342226445,8,Within 6 months,1015795,1
+16,Data Science,6.2,3,5,Low,Tier 3,High,0.108786609,0.131037225,0.174051111,0,Within 12 months,554454,2
+17,Nursing,9.65,1,1,Low,Tier 2,Low,0.472914045,0.343176387,0.551810176,1,Within 12 months,416483,2
+18,Engineering,6.12,0,4,Medium,Tier 2,Medium,0.750353122,0.675784754,0.945021918,5,Within 12 months,576087,2
+19,Data Science,7.42,1,1,Medium,Tier 3,Medium,0.611491334,0.098023441,0.517869619,7,Within 12 months,530790,2
+20,Arts,6.06,3,5,High,Tier 2,High,0.100585657,0.12725148,0.831912174,6,Within 6 months,332307,1
+21,Engineering,6.31,0,5,High,Tier 2,Low,0.396606125,0.061666207,0.757032054,8,Within 12 months,540925,2
+22,MBA,9.64,2,4,Medium,Tier 2,Medium,0.507239498,0.996079129,0.518330787,1,Within 6 months,871184,1
+23,Arts,7.42,3,4,High,Tier 1,High,0.995845602,0.387076769,0.647554778,8,Within 3 months,487695,0
+24,Engineering,7.7,3,5,Low,Tier 3,Low,0.178607909,0.905795168,0.406680184,3,Within 6 months,444743,1
