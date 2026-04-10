@@ -5,6 +5,12 @@ import plotly.express as px
 import os
 from io import BytesIO
 
+import os
+
+# --- CLOUD CONFIGURATION ---
+# Check if running in a cloud environment (like Render)
+API_BASE_URL = os.getenv("API_URL", "http://localhost:8000")
+
 st.set_page_config(page_title="AI Education Loan Underwriter", layout="wide")
 
 # Custom CSS for Premium Look
@@ -64,7 +70,7 @@ with tab_single:
     if st.sidebar.button("👉 Run Comprehensive Underwriting"):
         with st.spinner("Executing Risk Models..."):
             try:
-                response = requests.post("http://localhost:8000/predict", json=input_data)
+                response = requests.post(f"{API_BASE_URL}/predict", json=input_data)
                 if response.status_code == 200:
                     res = response.json()
                     st.subheader("🎓 Personal Assessment Result")
@@ -125,7 +131,7 @@ with tab_batch:
                         if alias in df.columns and target not in df.columns: df.rename(columns={alias: target}, inplace=True)
                 
                 payload = df.to_dict(orient='records')
-                response = requests.post("http://localhost:8000/simulate-scenario", json={"data": payload, "scenario": scenario})
+                response = requests.post(f"{API_BASE_URL}/simulate-scenario", json={"data": payload, "scenario": scenario})
                 
                 if response.status_code == 200:
                     results = response.json()
