@@ -173,19 +173,47 @@ def calculate_percentile(salary, cgpa):
     return 100 - percentile # "Top X%"
 
 def calculate_risk_breakdown(data):
-    # Mapping features to risk categories
-    academic_risk = 100 - (data['cgpa'] * 10)
-    market_risk = 100 - (data['industry_demand_index'] * 100)
-    
-    # Tier influence on market risk
-    tier_penalty = {'Tier 1': 0, 'Tier 2': 15, 'Tier 3': 30}
-    market_risk = min(100, market_risk + tier_penalty.get(data['institute_tier'], 15))
-    
+    """
+    Fully dynamic risk breakdown — all three scores are driven
+    directly by the actual input values so the chart changes
+    with every different profile.
+    """
+    cgpa            = float(data.get('cgpa', 7.0))
+    demand          = float(data.get('industry_demand_index', 0.5))
+    density         = float(data.get('regional_job_density', 0.5))
+    internships     = int(data.get('internships', 0))
+    certifications  = int(data.get('certifications', 0))
+    mock            = int(data.get('mock_interviews_cleared', 0))
+    portal          = float(data.get('job_portal_activity', 0.5))
+    tier            = str(data.get('institute_tier', 'Tier 2'))
+
+    # Academic Risk  (0 = no risk, 100 = max risk)
+    # Driven by CGPA  (10 → 0 risk,  4 → 60 risk)
+    academic_risk = round(max(0, min(100, (10 - cgpa) * 10)), 1)
+
+    # Market Risk
+    # Driven by demand index, job density, and institute tier
+    tier_penalty  = {'Tier 1': 0, 'Tier 2': 15, 'Tier 3': 30}
+    market_risk   = round(max(0, min(100,
+        (1 - demand) * 50 +
+        (1 - density) * 20 +
+        tier_penalty.get(tier, 15)
+    )), 1)
+
+    # Professional Risk
+    # Driven by internships, certifications, mocks, and portal activity
+    intern_score  = min(internships * 20, 60)      # max 60 pts
+    cert_score    = min(certifications * 8, 30)    # max 30 pts
+    mock_score    = min(mock * 5, 20)              # max 20 pts
+    portal_score  = min(int(portal * 20), 20)      # max 20 pts
+    prof_risk     = round(max(0, 100 - (intern_score + cert_score + mock_score + portal_score)), 1)
+
     return {
-        "academic": round(max(0, academic_risk), 1),
-        "market": round(max(0, market_risk), 1),
-        "professional": round(max(0, 100 - (data['internships'] * 25 + data['certifications'] * 10)), 1)
+        "academic":     academic_risk,
+        "market":       market_risk,
+        "professional": prof_risk
     }
+
 
 def generate_polished_summary(label, data):
     strengths = []
