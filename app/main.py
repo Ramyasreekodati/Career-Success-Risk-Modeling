@@ -74,7 +74,7 @@ def core_predict(model_data: dict):
     load_all_models()
     try:
         # Debugging: Log Input
-        print(f"DEBUG: Processing record with keys: {list(model_data.keys())}")
+        print(f"DEBUG: Input data received: {model_data}")
         
         # Extract and validate loan fields (provide defaults if missing)
         loan_info = {
@@ -83,28 +83,37 @@ def core_predict(model_data: dict):
             "tenure_years": int(model_data.get("tenure_years", 15))
         }
         
-        # Create a clean copy for ML features
-        features_dict = {k: v for k, v in model_data.items() if k in StudentData.__fields__}
+        # Filter features to those expected by the model structure
+        # (Handling both Pydantic v1 and v2 attribute names for robustness)
+        feature_keys = (
+            StudentData.model_fields.keys() if hasattr(StudentData, "model_fields") 
+            else StudentData.__fields__.keys()
+        )
+        features_dict = {k: v for k, v in model_data.items() if k in feature_keys}
         
-        # Preprocess
-        input_encoded = pd.get_dummies(pd.DataFrame([features_dict]))
-        final_input = pd.DataFrame(columns=models['features']).fillna(0)
+        # Preprocess: One-Hot Encoding Alignment
+        input_df = pd.DataFrame([features_dict])
+        input_encoded = pd.get_dummies(input_df)
+        
+        # Align with training features
+        final_input = pd.DataFrame(0, index=[0], columns=models['features'])
         for col in models['features']:
             if col in input_encoded.columns:
                 final_input[col] = input_encoded[col]
         
-        # Verify shape
+        # Scale
         scaled_input = models['scaler'].transform(final_input)
+        print(f"DEBUG: Features scaled. Shape: {scaled_input.shape}")
         
-        # Base Predictions
+        # 1. Base Predictions
         timeline_probs = models['clf'].predict_proba(scaled_input)[0]
         timeline_idx = np.argmax(timeline_probs)
         timeline_label = str(models['le'].classes_[timeline_idx])
         
         salary = float(models['reg'].predict(scaled_input)[0])
-        salary = max(300000, min(2500000, salary))
+        salary = max(300000, min(2500000, salary)) # Realistic bounds
         
-        # Underwriting / Decision Logic
+        # 2. Underwriting Decision Logic
         stress = calculate_stress_test(salary, timeline_label, loan_info)
         current_risk = "Low" if "3 months" in timeline_label else "Medium" if "6 months" in timeline_label else "High"
         
@@ -118,14 +127,14 @@ def core_predict(model_data: dict):
         pd_info = estimate_default_probability(current_risk, stress['debt_to_income_ratio'])
         
         # 3. Targeted Interventions
-        goal_res = generate_targeted_interventions(
+        interventions = generate_targeted_interventions(
             current_risk,
             features_dict,
             internal_predict
         )
 
-        # 4. Structured AI Narrative (Data-Driven)
-        ai_report = generate_ai_narrative(
+        # 4. Structured AI Narrative
+        ai_narrative = generate_ai_narrative(
             risk_level=current_risk,
             dti=stress['debt_to_income_ratio'],
             salary=salary,
@@ -137,26 +146,28 @@ def core_predict(model_data: dict):
 
         # Final result assembly
         return {
+            "status": "success",
             "placement_timeline": timeline_label,
             "predicted_salary": round(salary, 2),
             "salary_lpa": f"{round(salary/100000, 2)} LPA",
             "underwriting_decision": uw_decision,
             "pricing_breakdown": pricing,
             "default_risk": pd_info,
-            "intervention": goal_res,
+            "intervention": interventions,
             "risk_breakdown": calculate_risk_breakdown(
                 features_dict,
                 salary=salary,
                 emi=stress.get('monthly_emi', 0),
                 dti=stress.get('debt_to_income_ratio', 0)
             ),
-            "ai_summary": ai_report["narrative"],
-            "ai_report": ai_report,
-            "stress_test": stress,
-            "status": "success"
+            "ai_summary": ai_narrative["narrative"],
+            "ai_report": ai_narrative,
+            "stress_test": stress
         }
     except Exception as e:
-        print(f"ERROR in Core Predict: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"CRITICAL ERROR in core_predict: {str(e)}\n{error_trace}")
         return {"status": "error", "error_message": str(e)}
 
 @app.post("/predict")

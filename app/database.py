@@ -2,7 +2,8 @@ import json
 import datetime
 import os
 
-LOG_FILE = "data/audit_logs.jsonl"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOG_FILE = os.path.join(BASE_DIR, "data", "audit_logs.jsonl")
 
 def log_decision(student_data, prediction, decision):
     """
