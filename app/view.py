@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import os
 import sys
+import datetime
 
 # Path setup for cloud
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -19,9 +20,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- SESSION STATE INITIALIZATION ---
+# --- SESSION STATE INITIALIZATION (TRUE STATE MANAGEMENT) ---
 if 'prediction_result' not in st.session_state:
     st.session_state.prediction_result = None
+if 'session_history' not in st.session_state:
+    st.session_state.session_history = []  # Single source of truth for current sessions
 if 'last_input' not in st.session_state:
     st.session_state.last_input = None
 
@@ -44,6 +47,14 @@ st.markdown("""
         border-radius: 15px;
         margin: 16px 0;
         border-left: 10px solid;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 50px;
+        background: #1e2130;
+        border-radius: 15px;
+        color: #aaa;
+        border: 2px dashed #343a40;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -71,14 +82,25 @@ def preprocess_input(sidebar_data):
     }
 
 def run_prediction(input_data):
-    """Execute model prediction and log results."""
+    """Execute model prediction and log results to session state and database."""
     try:
         with st.spinner("AI Underwriter Analyzing Profile..."):
             res = core_predict(input_data)
             if res and res.get('status') == 'success':
                 st.session_state.prediction_result = res
                 st.session_state.last_input = input_data
-                # LOG TO DATABASE
+                
+                # Update Session History (TRUE STATE)
+                history_entry = {
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "decision": res['underwriting_decision']['decision'],
+                    "salary": res['salary_lpa'],
+                    "risk": res['default_risk']['category'],
+                    "dti": f"{res['stress_test']['debt_to_income_ratio']*100:.1f}%"
+                }
+                st.session_state.session_history.append(history_entry)
+                
+                # LOG TO PERMANENT DATABASE (Optional but kept for global stats)
                 log_decision(input_data, res, res['underwriting_decision'])
                 return res
             else:
@@ -111,7 +133,8 @@ def plot_risk_variance(risk_breakdown):
         showlegend=False, 
         yaxis_range=[0, 110],
         margin=dict(l=20, r=20, t=20, b=20),
-        height=350
+        height=350,
+        template="plotly_dark"
     )
     return fig
 
@@ -120,10 +143,11 @@ def plot_risk_variance(risk_breakdown):
 st.title("⚖️ AI Education Loan Underwriting System")
 st.markdown("Automated Career Verification & Credit Intelligence Platform")
 
-tab_single, tab_batch, tab_history = st.tabs([
-    "📂 Individual Loan Assessment",
-    "📊 Portfolio Batch Underwriting",
-    "🕵️ System Summary & History"
+tab_single, tab_batch, tab_history, tab_report = st.tabs([
+    "📂 Individual Assessment",
+    "📊 Portfolio Batch",
+    "🕵️ Session History & Stats",
+    "📖 Project Report"
 ])
 
 # --- SIDEBAR INPUTS ---
@@ -208,7 +232,12 @@ with tab_single:
             if res.get('intervention', {}).get('text'):
                 st.info(f"**💡 Insight:** {res['intervention']['text']}")
     else:
-        st.info("👋 Welcome! Fill in the applicant profile on the left and click **'Run Full Underwriting'** to start.")
+        st.markdown("""
+            <div class="empty-state">
+                <h2 style="margin:0;">No Active Assessment</h2>
+                <p>Configure the profile in the sidebar and click <b>'Run Full Underwriting'</b> to see results here.</p>
+            </div>
+        """, unsafe_allow_html=True)
 
 # --- TAB 2: BATCH PORTFOLIO ---
 with tab_batch:
@@ -248,39 +277,50 @@ with tab_batch:
                 st.plotly_chart(px.pie(res_df, names="Decision", title="Portfolio Decision Distribution"))
             else:
                 st.error("Could not process any records. Ensure CSV matches expected features.")
-
-# --- TAB 3: SYSTEM SUMMARY ---
-with tab_history:
-    st.subheader("🕵️ Platform Historical Analytics")
-    
-    stats = get_learning_stats()
-    total = stats.get('total_inferences', 0)
-    approvals = stats.get('approvals', 0)
-    yield_val = f"{(approvals / total * 100):.1f}%" if total > 0 else "0.0%"
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Decisions", total)
-    c2.metric("Approval Rate", yield_val)
-    c3.metric("System Health", "Active" if total > 0 else "Idle")
-    
-    st.divider()
-    
-    # Load recent logs
-    from app.database import LOG_FILE
-    if os.path.exists(LOG_FILE):
-        try:
-            audit_df = pd.read_json(LOG_FILE, lines=True)
-            st.subheader("📋 Recent Audit Logs")
-            # Flatten some fields for better display
-            display_df = audit_df.copy()
-            display_df['Decision'] = display_df['underwriting'].apply(lambda x: x.get('decision') if isinstance(x, dict) else x)
-            display_df['Salary Forecast'] = display_df['prediction'].apply(lambda x: x.get('salary_lpa') if isinstance(x, dict) else 'N/A')
-            
-            st.dataframe(
-                display_df[['timestamp', 'Decision', 'Salary Forecast']].tail(20).iloc[::-1],
-                use_container_width=True
-            )
-        except Exception as e:
-            st.warning("Logs found but could not be parsed yet.")
     else:
-        st.info("No historical data available. Run some assessments to populate this dashboard.")
+        st.markdown("""
+            <div class="empty-state">
+                <h2 style="margin:0;">No CSV Uploaded</h2>
+                <p>Upload a list of applicants to perform bulk underwriting and scenario simulations.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+# --- TAB 3: SESSION HISTORY & STATS ---
+with tab_history:
+    st.subheader("🕵️ Your Session Intelligence")
+    
+    if st.session_state.session_history:
+        # Dynamic calculation from REAL session data
+        history_df = pd.DataFrame(st.session_state.session_history)
+        total = len(history_df)
+        approvals = len(history_df[history_df['decision'].str.contains('Approve')])
+        yield_val = f"{(approvals / total * 100):.1f}%"
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Your Decisions", total)
+        c2.metric("Your Approval Rate", yield_val)
+        c3.metric("System Status", "Live Monitoring")
+        
+        st.divider()
+        st.subheader("📋 Session Audit Log")
+        st.dataframe(history_df.iloc[::-1], use_container_width=True) # Reverse for latest first
+        
+        if st.button("🗑️ Clear My Session History"):
+            st.session_state.session_history = []
+            st.rerun()
+    else:
+        st.markdown("""
+            <div class="empty-state">
+                <h2 style="margin:0;">No Personal History Yet</h2>
+                <p>Run your first assessment to see dynamic metrics and audit logs here.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+# --- TAB 4: PROJECT REPORT ---
+with tab_report:
+    report_path = os.path.join(os.path.dirname(__file__), '..', 'PROJECT_REPORT.md')
+    if os.path.exists(report_path):
+        with open(report_path, 'r', encoding='utf-8') as f:
+            st.markdown(f.read())
+    else:
+        st.error("Project Report file not found.")
