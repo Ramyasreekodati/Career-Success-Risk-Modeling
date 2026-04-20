@@ -39,6 +39,8 @@ The app follows a simple 4-step internal flow to turn raw data into intelligence
 *   **💰 Salary Forecast:** Predicts your starting salary in Lakhs Per Annum (LPA) using current industry benchmarks.
 *   **📈 Dynamic Visualizations:** Uses interactive bar graphs to show which factors (Academic vs. Market vs. Professional) are affecting your score the most.
 *   **🤖 AI Career Narrative:** Generates a human-like summary explaining the "Why" behind your results.
+*   **📄 Professional Reports:** Allows users to download a formal Underwriting Report for loan applications.
+*   **🚀 What-If Simulator:** Interactive tool to see how specific actions (like getting an internship) impact your risk in real-time.
 *   **🕵️ History Tracking:** Keeps a secure log of previous assessments to track how your profile improves over time.
 
 ---
